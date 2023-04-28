@@ -120,7 +120,9 @@ struct JSONFileDatabase {
 
 impl Database for JSONFileDatabase {
     fn read(&self) -> Result<DBState> {
-        let file = fs::File::open(&self.file_path)?;
+        let file =
+            fs::File::open(&self.file_path).with_context(|| format!("Error while opening file"))?;
+
         let db_state = serde_json::from_reader(file)?;
         Ok(db_state)
     }
