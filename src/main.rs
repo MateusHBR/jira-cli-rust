@@ -1,5 +1,6 @@
 mod db;
 mod models;
+mod ui;
 
 fn main() {
     let db = db::JiraDatabase::new("data/db.json".to_owned());
