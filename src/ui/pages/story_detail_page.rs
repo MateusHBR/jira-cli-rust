@@ -6,7 +6,7 @@ use crate::models::Action;
 
 use super::{page_helpers::get_column_string, Page};
 
-struct StoryDetail {
+pub struct StoryDetail {
     pub epic_id: u32,
     pub story_id: u32,
     pub db: Rc<JiraDatabase>,
