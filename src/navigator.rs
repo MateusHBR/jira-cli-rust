@@ -28,21 +28,21 @@ impl Navigator {
     pub fn handle_action(&mut self, action: Action) -> Result<()> {
         match action {
             Action::NavigateToEpicDetail { epic_id } => {
-                let epicDetailPage = Box::new(EpicDetail {
+                let epic_details_page = Box::new(EpicDetail {
                     db: Rc::clone(&self.db),
                     epic_id,
                 });
 
-                self.pages.push(epicDetailPage);
+                self.pages.push(epic_details_page);
             }
             Action::NavigateToStoryDetail { epic_id, story_id } => {
-                let storyDetailPage = Box::new(StoryDetail {
+                let story_details_page = Box::new(StoryDetail {
                     db: Rc::clone(&self.db),
                     epic_id,
                     story_id,
                 });
 
-                self.pages.push(storyDetailPage);
+                self.pages.push(story_details_page);
             }
             Action::NavigateToPreviousPage => {
                 if !self.pages.is_empty() {
@@ -70,6 +70,10 @@ impl Navigator {
                     self.db
                         .delete_epic(epic_id)
                         .with_context(|| anyhow!("Failed to delete epic"))?;
+
+                    if !self.pages.is_empty() {
+                        self.pages.pop();
+                    }
                 }
             }
             Action::CreateStory { epic_id } => {
@@ -92,6 +96,10 @@ impl Navigator {
                     self.db
                         .delete_story(epic_id, story_id)
                         .with_context(|| anyhow!("Failed to delete story"))?;
+
+                    if !self.pages.is_empty() {
+                        self.pages.pop();
+                    }
                 }
             }
             Action::Exit => self.pages.clear(),
@@ -105,6 +113,10 @@ impl Navigator {
 
     fn set_prompts(&mut self, prompts: Prompts) {
         self.prompts = prompts
+    }
+
+    fn add_page(&mut self, page: Box<dyn Page>) {
+        self.pages.push(page);
     }
 }
 
@@ -248,17 +260,34 @@ mod tests {
         let db = Rc::new(JiraDatabase {
             database: Box::new(MockDB::new()),
         });
+        let epic = Epic::new("name".to_owned(), "description".to_owned());
+        let epic_id = db.create_epic(epic).unwrap();
+
         let mut prompts = Prompts::new();
         prompts.delete_epic = Box::new(|| true);
         let mut nav = Navigator::new(Rc::clone(&db));
+        nav.add_page(Box::new(EpicDetail {
+            db: Rc::clone(&db),
+            epic_id,
+        }));
         nav.set_prompts(prompts);
 
-        let epic = Epic::new("name".to_owned(), "description".to_owned());
-        let epic_id = db.create_epic(epic).unwrap();
         let db_state = db.read().unwrap();
         assert_eq!(db_state.epics.len(), 1);
+        let current_page = nav.get_current_page().unwrap();
+        assert_eq!(
+            current_page.as_any().downcast_ref::<EpicDetail>().is_some(),
+            true
+        );
+        assert_eq!(nav.pages.len(), 2);
 
         nav.handle_action(Action::DeleteEpic { epic_id }).unwrap();
+        let current_page = nav.get_current_page().unwrap();
+        assert_eq!(nav.pages.len(), 1);
+        assert_eq!(
+            current_page.as_any().downcast_ref::<EpicDetail>().is_some(),
+            false
+        );
         let db_state = db.read().unwrap();
         assert!(db_state.epics.is_empty());
     }
@@ -350,6 +379,19 @@ mod tests {
         prompts.delete_story = Box::new(|| true);
         let mut nav = Navigator::new(Rc::clone(&db));
         nav.set_prompts(prompts);
+        nav.add_page(Box::new(StoryDetail {
+            db: Rc::clone(&db),
+            epic_id,
+            story_id,
+        }));
+        let current_page = nav.get_current_page().unwrap();
+        assert_eq!(
+            current_page
+                .as_any()
+                .downcast_ref::<StoryDetail>()
+                .is_some(),
+            true
+        );
 
         nav.handle_action(Action::DeleteStory { epic_id, story_id })
             .unwrap();
@@ -363,6 +405,14 @@ mod tests {
                 .unwrap()
                 .stories
                 .contains(&story_id),
+            false
+        );
+        let current_page = nav.get_current_page().unwrap();
+        assert_eq!(
+            current_page
+                .as_any()
+                .downcast_ref::<StoryDetail>()
+                .is_some(),
             false
         );
     }

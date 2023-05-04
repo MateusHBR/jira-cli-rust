@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Display};
 
 use serde::{Deserialize, Serialize};
 
@@ -14,6 +14,30 @@ pub enum Action {
     UpdateStoryStatus { story_id: u32 },
     DeleteStory { epic_id: u32, story_id: u32 },
     Exit,
+}
+
+impl Display for Action {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let result = match self {
+            Action::NavigateToEpicDetail { epic_id: _ } => "NavigateToEpicDetail",
+            Action::NavigateToStoryDetail {
+                epic_id: _,
+                story_id: _,
+            } => "NavigateToStoryDetail",
+            Action::NavigateToPreviousPage => "NavigateToPreviousPage",
+            Action::CreateEpic => "CreateEpic",
+            Action::UpdateEpicStatus { epic_id: _ } => "UpdateEpicStatus",
+            Action::DeleteEpic { epic_id: _ } => "DeleteEpic",
+            Action::CreateStory { epic_id: _ } => "CreateStory",
+            Action::UpdateStoryStatus { story_id: _ } => "UpdateStoryStatus",
+            Action::DeleteStory {
+                epic_id: _,
+                story_id: _,
+            } => "DeleteStory",
+            Action::Exit => "Exit",
+        };
+        write!(f, "{result}")
+    }
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug)]
