@@ -49,6 +49,10 @@ impl Page for StoryDetail {
             _ => Ok(None),
         }
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 #[cfg(test)]

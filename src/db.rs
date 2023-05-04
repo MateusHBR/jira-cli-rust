@@ -76,6 +76,29 @@ impl JiraDatabase {
             .with_context(|| format!("Failed write deleted epic data"))
     }
 
+    pub fn delete_story(&self, epic_id: u32, story_id: u32) -> Result<()> {
+        let mut data = self
+            .database
+            .read()
+            .with_context(|| format!("Failed to read database on delete story"))?;
+
+        let Some(epic) = data.epics.get_mut(&epic_id) else {
+            return Err(anyhow!(format!("Failed to delete story - epic not found")));
+        };
+        let story_index = epic
+            .stories
+            .iter()
+            .position(|id| id == &story_id)
+            .ok_or_else(|| anyhow!("story_id not registered inside the given epic"))?;
+        epic.stories.remove(story_index);
+        data.stories.remove(&story_id);
+
+        self.database
+            .write(&data)
+            .with_context(|| format!("Failed to write deleted story data"))?;
+        Ok(())
+    }
+
     pub fn update_epic_status(&self, epic_id: u32, status: Status) -> Result<()> {
         let mut data = self
             .database
@@ -266,6 +289,52 @@ mod tests {
         assert!(db_state.epics.get(&created_epic_id).is_none());
         assert!(db_state.stories.get(&created_story_id).is_none());
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn delete_story_should_error_if_invalid_epic_or_invalid_story() {
+        let db = JiraDatabase {
+            database: Box::new(MockDB::new()),
+        };
+
+        let invalid_epic_id = 999;
+        let invalid_story_id = 999;
+        let result = db.delete_story(invalid_epic_id, invalid_story_id);
+        assert!(result.is_err());
+
+        let epic = Epic::new("".to_owned(), "".to_owned());
+        let epic_id = db.create_epic(epic).unwrap();
+        let result = db.delete_story(epic_id, invalid_story_id);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn delete_story_should_work() {
+        let db = JiraDatabase {
+            database: Box::new(MockDB::new()),
+        };
+
+        let epic = Epic::new("".to_owned(), "".to_owned());
+        let epic_id = db.create_epic(epic).unwrap();
+
+        let story = Story::new("".to_owned(), "".to_owned());
+        let story_id = db.create_story(story, epic_id).unwrap();
+
+        let data = db.read().unwrap();
+        assert!(data.stories.get(&story_id).is_some());
+        assert!(data
+            .epics
+            .get(&epic_id)
+            .unwrap()
+            .stories
+            .contains(&story_id));
+
+        let result = db.delete_story(epic_id, story_id);
+        assert!(result.is_ok());
+
+        let data = db.read().unwrap();
+        assert!(data.epics.get(&epic_id).unwrap().stories.is_empty());
+        assert_eq!(data.stories.get(&story_id), None);
     }
 
     #[test]
